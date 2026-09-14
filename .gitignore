@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+.surge-creds
+.supa-pat
+node_modules/
+.DS_Store
+*.log
