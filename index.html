@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f2027">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Mis Cartas Pokémon</title>
+<script>
+/* Resuelve la pestaña antes del primer pintado para evitar el flash de Escanear. */
+(function () {
+  var valid = ['scan', 'search', 'collection', 'sets'];
+  var tab = location.hash.slice(1);
+  if (valid.indexOf(tab) < 0) {
+    try { tab = JSON.parse(localStorage.getItem('pk.activeTab')) || 'scan'; } catch (_) { tab = 'scan'; }
+  }
+  if (valid.indexOf(tab) < 0) tab = 'scan';
+  document.documentElement.setAttribute('data-initial-tab', tab);
+  var query = new URLSearchParams(location.search).get('q');
+  if (!query) { try { query = (JSON.parse(localStorage.getItem('pk.searchState')) || {}).q; } catch (_) {} }
+  if (query) document.documentElement.setAttribute('data-initial-search', query);
+})();
+</script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="app-header">
+  <button id="btn-account" class="account-btn" aria-label="Cuenta">👤</button>
+  <h1>Mis Cartas <span>Pokémon</span></h1>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="scan"><span class="tab-emoji">📷 </span>Escanear</button>
+  <button class="tab" data-tab="search"><span class="tab-emoji">🔍 </span>Buscar</button>
+  <button class="tab" data-tab="collection"><span class="tab-emoji">🗂️ </span>Colección</button>
+  <button class="tab" data-tab="sets"><span class="tab-emoji">📚 </span>Sets</button>
+</nav>
+
+<main>
+  <!-- ESCANEAR -->
+  <section id="tab-scan" class="tab-panel active">
+    <div id="scan-locked" class="scan-locked" hidden>
+      <div class="scan-locked-icon">🔒</div>
+      <h3>Inicia sesión para escanear</h3>
+      <p>El reconocimiento de cartas pasa por nuestro servidor y tiene un límite mensual, así que hace falta cuenta. Entra o créate una gratis y a escanear.</p>
+      <button id="btn-scan-login" class="btn primary">Iniciar sesión / Crear cuenta</button>
+      <p class="muted">Buscar por nombre y tu colección local siguen disponibles sin cuenta.</p>
+    </div>
+    <div id="scan-controls">
+    <div class="camera-box">
+      <video id="camera" playsinline autoplay muted></video>
+      <canvas id="snapshot" hidden></canvas>
+      <div id="frame-guide" class="frame-guide" hidden></div>
+      <div id="camera-placeholder" class="camera-placeholder">
+        <p>Apunta con la cámara a una carta y pulsa el botón amarillo: yo la identifico y tú confirmas antes de guardarla.</p>
+      </div>
+      <button id="btn-capture" class="shutter" hidden>📸 IDENTIFICAR</button>
+    </div>
+    <div class="btn-row">
+      <button id="btn-start-camera" class="btn primary">Activar cámara</button>
+      <button id="btn-stop-camera" class="btn ghost" hidden>Apagar cámara</button>
+    </div>
+    <div class="btn-row">
+      <label class="btn ghost">
+        o sube una foto
+        <input id="file-input" type="file" accept="image/*" hidden>
+      </label>
+    </div>
+    <div id="scan-status" class="status" hidden></div>
+    <div id="scan-results" class="candidates"></div>
+    </div>
+  </section>
+
+  <!-- BUSCAR -->
+  <section id="tab-search" class="tab-panel">
+    <form id="search-form" class="search-bar" role="search" autocomplete="off">
+      <input id="search-input" name="card-query" type="search" inputmode="search" placeholder="Nombre o código (p. ej. Charizard o DAA 136)" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore>
+      <button class="btn primary" type="submit">Buscar</button>
+    </form>
+    <div id="search-status" class="status" hidden></div>
+    <div id="search-results" class="card-grid"></div>
+    <script>
+    /* El término aparece en el input en el mismo parseo del primer frame. */
+    (function () {
+      var q = document.documentElement.getAttribute('data-initial-search');
+      if (q) {
+        document.getElementById('search-input').value = q;
+        var st = document.getElementById('search-status');
+        st.hidden = false; st.textContent = 'Restaurando búsqueda…';
+      }
+    })();
+    </script>
+  </section>
+
+  <!-- COLECCIÓN -->
+  <section id="tab-collection" class="tab-panel">
+    <div class="collection-header">
+      <div>
+        <div class="total-label">Valor total (Cardmarket, tendencia)</div>
+        <div id="collection-total" class="total-value">—</div>
+      </div>
+      <button id="btn-refresh-prices" class="btn ghost">Actualizar precios</button>
+    </div>
+    <section id="value-history" class="value-history" aria-labelledby="value-history-title">
+      <div class="value-history-head">
+        <div>
+          <h2 id="value-history-title">Evolución del valor</h2>
+          <p id="value-history-summary" class="value-history-summary">Actualiza los precios para empezar el histórico.</p>
+        </div>
+        <span id="value-history-change" class="value-change" hidden></span>
+      </div>
+      <div id="value-history-chart" class="value-history-chart" role="img" aria-label="Gráfica de evolución del valor de la colección"></div>
+      <div id="value-history-legend" class="value-history-legend" hidden><span><i></i> Valor de la colección</span><span><i class="approx"></i> Referencia 30d aproximada</span></div>
+    </section>
+    <div id="collection-status" class="status" hidden></div>
+    <div id="collection-grid" class="card-grid"></div>
+    <p id="collection-empty" class="empty">Aún no tienes cartas guardadas. Escanea o busca tu primera carta.</p>
+  </section>
+
+  <!-- SETS -->
+  <section id="tab-sets" class="tab-panel">
+    <div class="sets-summary" id="sets-summary"></div>
+    <div id="sets-filter-wrap">
+      <div class="search-bar">
+        <input id="sets-filter" name="set-query" type="search" inputmode="search" placeholder="Filtrar por nombre, serie o código…" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore>
+      </div>
+      <label class="sets-asia-filter">
+        <input id="sets-hide-asian" type="checkbox">
+        <span>Filtrar colecciones asiáticas</span>
+      </label>
+    </div>
+    <div id="sets-list"></div>
+    <div id="set-detail" hidden>
+      <button id="set-detail-back" class="btn ghost">← Todas las colecciones</button>
+      <div id="set-detail-head"></div>
+      <div id="set-detail-langs-shell" class="sets-lang-shell">
+        <button id="set-detail-langs-prev" class="sets-lang-arrow prev" type="button" aria-label="Ver idiomas anteriores">‹</button>
+        <div id="set-detail-langs" class="sets-lang-filter" aria-label="Ver colección por idioma"></div>
+        <button id="set-detail-langs-next" class="sets-lang-arrow next" type="button" aria-label="Ver más idiomas">›</button>
+      </div>
+      <div id="set-detail-grid" class="card-grid"></div>
+    </div>
+  </section>
+</main>
+
+<!-- MODAL CUENTA -->
+<div id="account-modal" class="modal" hidden>
+  <div class="modal-card">
+    <button id="account-close" class="modal-close" aria-label="Cerrar">✕</button>
+    <h2 id="account-title">Tu cuenta</h2>
+    <div id="account-logged-out">
+      <p class="muted">Con cuenta tu colección se sincroniza entre tu móvil y tu PC, y el escaneo ilimitado pasa por nuestro servidor.</p>
+      <input id="account-email" name="username" type="email" placeholder="Email" autocomplete="username">
+      <input id="account-password" name="password" type="password" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="current-password">
+      <button id="btn-login" class="btn primary big">Entrar</button>
+      <button id="btn-signup" class="btn ghost big">Crear cuenta</button>
+    </div>
+    <div id="account-logged-in" hidden>
+      <p id="account-user" class="account-user"></p>
+      <p id="account-scans" class="muted"></p>
+      <p id="account-sync" class="muted"></p>
+      <button id="btn-logout" class="btn ghost big">Cerrar sesión</button>
+    </div>
+    <p id="account-status" class="status" hidden></p>
+  </div>
+</div>
+
+<!-- MODAL CARTA -->
+<div id="card-modal" class="modal" hidden>
+  <div class="modal-card">
+    <button id="modal-close" class="modal-close" aria-label="Cerrar">✕</button>
+    <div id="modal-foil" class="foil-card">
+      <img id="modal-img" alt="">
+      <span class="foil-layer" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></span>
+    </div>
+    <h2 id="modal-name"></h2>
+    <p id="modal-set" class="muted"></p>
+    <p id="modal-rarity" class="muted"></p>
+    <div id="modal-prices" class="prices"></div>
+    <div id="variant-row" class="variant-row">
+      <div id="modal-variants" class="variant-btns"></div>
+    </div>
+    <div class="lang-row">
+      <label for="modal-lang">Idioma</label>
+      <select id="modal-lang"></select>
+    </div>
+    <p id="modal-lang-note" class="muted lang-note" hidden></p>
+    <div class="qty-row">
+      <button id="qty-minus" class="btn ghost">−</button>
+      <span id="qty-value">1</span>
+      <button id="qty-plus" class="btn ghost">+</button>
+    </div>
+    <button id="modal-add" class="btn primary big">Añadir a mi colección</button>
+    <p id="modal-added" class="added-note" hidden>Guardada ✓</p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="aliases.js"></script>
+<script src="sets-data.js"></script>
+<script src="app.js?v=20260914-flag-badge-v13"></script>
+</body>
+</html>
