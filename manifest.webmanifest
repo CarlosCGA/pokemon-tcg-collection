@@ -1,0 +1,12 @@
+{
+  "name": "Mis Cartas Pokémon",
+  "short_name": "Mis Cartas",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0f2027",
+  "theme_color": "#0f2027",
+  "lang": "es",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
